@@ -5,6 +5,7 @@
   "author": "Curtis <curtistbone@gmail.com>",
   "description": "Family helper",
   "dependencies": {
+    "coffee-script": "^1.12.3",
     "hubot": "^2.19.0",
     "hubot-azure-scripts": "^0.1.7",
     "hubot-diagnostics": "0.0.1",
