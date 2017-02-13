@@ -8,7 +8,8 @@
 #   hubot giftcard add '<name>' with $<balance> and #:<number> (p:<pin>, c:<categories>) - Adds a new giftcard <pin> and <categories> are optional
 #   hubot giftcard remove all - Removes all giftcards from storage
 # TODO
-#   hubot giftcard remove <number> - Removes specific giftcard from storage (exact number required)
+#   hubot giftcard find <number> - Finds specific giftcard (exact number required)
+#   hubot giftcard remove <number> - Removes specific giftcard (exact number required)
 #   hubot giftcard set balance on <number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set category on <number> to c:<categories> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set name on <number> to '<name>' - Updates the name for a specific card (allow wildcard for number)
@@ -22,7 +23,7 @@ module.exports = (robot) ->
   #  wallet = new Wallet robot
   #  
 
-  robot.respond /giftcard(s?) list/i, (msg) ->
+  robot.respond /(gc|giftcard(s?)) list/i, (msg) ->
     wallet = new Wallet robot
     wallet.list (err, results) -> 
       if err?
@@ -41,7 +42,7 @@ module.exports = (robot) ->
           ]
         })
 
-  robot.respond /giftcard(s?) remove all/i, (msg) ->
+  robot.respond /(gc|giftcard(s?)) remove all/i, (msg) ->
     wallet = new Wallet robot
     wallet.clear (messageKey) ->
       switch messageKey
@@ -50,7 +51,7 @@ module.exports = (robot) ->
         when "Success" then msg.reply "All trace evidence has been removed"
         else msg.reply "I'm unsure what happened: #{messageKey}"
   
-  robot.respond /giftcard(s?) add.+/i, (msg) ->
+  robot.respond /(gc|giftcard(s?)) add.+/i, (msg) ->
     nameMatch = msg.match[0].match /'(.+)'/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     numberMatch = msg.match[0].match /#:(\d+)/i
@@ -61,7 +62,7 @@ module.exports = (robot) ->
     pinMatch = msg.match[0].match /p:(\d+)/i
     categoryMatch = msg.match[0].match /c:(\S+)/i
     
-    gc = new Giftcard nameMatch[1], balanceMatch[1], numberMatch[1], pinMatch?[1], categoryMatch?[1]
+    gc = new Giftcard nameMatch[1], balanceMatch[1]*100, numberMatch[1], pinMatch?[1], categoryMatch?[1]
     wallet = new Wallet robot
 
     wallet.add gc, (err, message) ->
@@ -110,6 +111,16 @@ class Wallet
     else
       callback "Empty"
 
+  list: (callback) ->
+    if @all().length > 0
+      results = []
+      for entry in @all()
+        if entry?
+          results.push new Giftcard entry.name, entry.balance, entry.number, entry.pin, entry.categories
+      callback null, results
+    else
+      callback "No Giftcards exist"
+
   add: (gc, callback) ->
     if gc?
       results = if @all().length > 0 then @_find gc.number else []
@@ -120,17 +131,6 @@ class Wallet
         callback null, "Giftcard added"
     else
       callback "Not a valid giftcard"
-
-  list: (callback) ->
-    if @all().length > 0
-      results = []
-      for entry in @all()
-        if entry?
-          results.push new Giftcard entry.name, entry.balance, entry.number, entry.pin, entry.categories
-          console.log results
-      callback null, results
-    else
-      callback "No Giftcards exist"
 
   find: (numberExp, callback) ->
     if @all().length > 0
@@ -159,10 +159,9 @@ class Giftcard
     @pin = pin
     @categories = categories
 
-    console.log @formattedString
-
   formattedString: ->
-    text = "*#{@name}*  $#{@balance}  #:#{@number}"
+    balanceInDollars = (@balance / 100).toFixed(2)
+    text = "*#{@name}*  $#{balanceInDollars}  #:#{@number}"
     if @pin?
       text += "  _p:#{@pin}_"
     if @pin?
