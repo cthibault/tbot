@@ -7,9 +7,8 @@
 #   hubot giftcard list - Lists stored giftcards
 #   hubot giftcard add '<name>' with $<balance> and #:<number> (p:<pin>, c:<categories>) - Adds a new giftcard <pin> and <categories> are optional
 #   hubot giftcard remove all - Removes all giftcards from storage
-# TODO
 #   hubot giftcard find <number> - Finds specific giftcard (exact number required)
-#   hubot giftcard remove <number> - Removes specific giftcard (exact number required)
+# TODO
 #   hubot giftcard set balance on <number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set category on <number> to c:<categories> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set name on <number> to '<name>' - Updates the name for a specific card (allow wildcard for number)
@@ -81,7 +80,30 @@ module.exports = (robot) ->
             }
           ]
         })
-        #msg.reply "Thanks. I'll start tracking this card:\r\r#{gc.formattedString()}"
+  robot.respond /(gc|giftcard(s?)) find.+/i, (msg) ->
+    numberMatch = msg.match[0].match /#:([\*\d]+)/i
+
+    unless numberMatch?
+      msg.reply "You need to provide the Number for me to search to your wallet"
+
+    wallet = new Wallet robot
+
+    wallet.find numberMatch[1], (err, results) ->
+      if err?
+        msg.reply "I wasn't able to find any matching cards."
+      else
+        msg.send({
+          "attachments": [
+            {
+              "pretext": "Here are the cards I was able to find..."
+              "text": ("#{r.formattedString()}" for r in results).join("\r")
+              "mrkdwn_in": [
+                "text",
+                "pretext"
+              ]
+            }
+          ]
+        })
 
 # Classes
 
@@ -134,7 +156,7 @@ class Wallet
 
   find: (numberExp, callback) ->
     if @all().length > 0
-      resuts = @_find numberExp
+      results = @_find numberExp
       if results.length > 0
         callback null, results
       else
@@ -148,7 +170,7 @@ class Wallet
     @all().forEach (gc) ->
       if gc and gc.number
         if RegExp(exp, "i").test gc.number
-          results.push gc
+          results.push new Giftcard gc.name, gc.balance, gc.number, gc.pin, gc.categories
     return results
 
 class Giftcard
