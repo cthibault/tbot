@@ -5,12 +5,12 @@
 #
 # Commands:
 #   hubot giftcard list - Lists stored giftcards
-#   hubot giftcard add '<name>' with $<balance> and #:<number> (p:<pin>, c:<categories>) - Adds a new giftcard <pin> and <categories> are optional
-#   hubot giftcard remove all - Removes all giftcards from storage
-#   hubot giftcard find <number> - Finds specific giftcard (exact number required)
+#   hubot giftcard add '<name>' with $<balance> and #:<number> (p:<pin>) - Adds a new giftcard to your wallet. <pin> is optional
+#   hubot giftcard remove all - Removes all giftcards from wallet
+#   hubot giftcard remove #:<number> - Removes giftcard from wallet (exact number required)
+#   hubot giftcard find ('<name>' | #:<number>) - Finds giftcard(s) by name or number (allow wildcards)
 # TODO
 #   hubot giftcard set balance on <number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
-#   hubot giftcard set category on <number> to c:<categories> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set name on <number> to '<name>' - Updates the name for a specific card (allow wildcard for number)
 #   hubot giftcard $<amount> transaction on <number> - Reduces the balance by the transacted amount for a specific card (allow wildcard for number)
 #
@@ -41,17 +41,8 @@ module.exports = (robot) ->
           ]
         })
 
-  robot.respond /(gc|giftcard(s?)) remove all/i, (msg) ->
-    wallet = new Wallet robot
-    wallet.clear (messageKey) ->
-      switch messageKey
-        when "NoRobot" then msg.reply "I'm having an internal crisis..."
-        when "Empty" then msg.reply "You already don't trust me with anything"
-        when "Success" then msg.reply "All trace evidence has been removed"
-        else msg.reply "I'm unsure what happened: #{messageKey}"
-  
-  robot.respond /(gc|giftcard(s?)) add.+/i, (msg) ->
-    nameMatch = msg.match[0].match /'(.+)'/i
+  robot.respond /(gc|giftcard(s?)) add .+/i, (msg) ->
+    nameMatch = msg.match[0].match /['"](.+)['"]/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     numberMatch = msg.match[0].match /#:(\d+)/i
 
@@ -59,9 +50,8 @@ module.exports = (robot) ->
       msg.reply "You need to provide the card's Name, Balance, and Number for me to add the card to your wallet [#{nameMatch?}, #{balanceMatch?}, #{numberMatch?}]"
     
     pinMatch = msg.match[0].match /p:(\d+)/i
-    categoryMatch = msg.match[0].match /c:(\S+)/i
     
-    gc = new Giftcard nameMatch[1], balanceMatch[1]*100, numberMatch[1], pinMatch?[1], categoryMatch?[1]
+    gc = new Giftcard nameMatch[1], balanceMatch[1]*100, numberMatch[1], pinMatch?[1]
     wallet = new Wallet robot
 
     wallet.add gc, (err, message) ->
@@ -80,30 +70,71 @@ module.exports = (robot) ->
             }
           ]
         })
-  robot.respond /(gc|giftcard(s?)) find.+/i, (msg) ->
-    numberMatch = msg.match[0].match /#:([\*\d]+)/i
 
-    unless numberMatch?
-      msg.reply "You need to provide the Number for me to search to your wallet"
+  robot.respond /(gc|giftcard(s?)) remove all/i, (msg) ->
+    wallet = new Wallet robot
+    wallet.clear (messageKey) ->
+      switch messageKey
+        when "NoRobot" then msg.reply "I'm having an internal crisis..."
+        when "Empty" then msg.reply "You already don't trust me with anything"
+        when "Success" then msg.reply "All trace evidence has been removed.  Your wallet is empty."
+        else msg.reply "I'm unsure what happened: #{messageKey}"
+
+  robot.respond /(gc|giftcard(s?)) remove #:(\d+)/i, (msg) ->
+    number = msg.match[3]
+    if number?
+      wallet = new Wallet robot
+      wallet.remove number, (messageKey) ->
+        switch messageKey
+          when "NotFound" then msg.reply "I'm unable to find that one..."
+          when "Empty" then msg.reply "You already don't trust me with anything"
+          when "Success" then msg.reply "All trace evidence has been removed for #:#{number}"
+          else msg.reply "I'm unsure what happened: #{messageKey}"
+
+  robot.respond /(gc|giftcard(s?)) find .+/i, (msg) ->
+    nameMatch = msg.match[0].match /['"](.+)['"]/i
+    numberMatch = msg.match[0].match /#:([\*\d]+)/i
+    
+    unless nameMatch? or numberMatch? 
+      msg.reply "Without a Name or Number I don't know what I'm looking for..."
 
     wallet = new Wallet robot
 
-    wallet.find numberMatch[1], (err, results) ->
-      if err?
-        msg.reply "I wasn't able to find any matching cards."
-      else
-        msg.send({
-          "attachments": [
-            {
-              "pretext": "Here are the cards I was able to find..."
-              "text": ("#{r.formattedString()}" for r in results).join("\r")
-              "mrkdwn_in": [
-                "text",
-                "pretext"
-              ]
-            }
-          ]
-        })
+    if nameMatch?
+      wallet.findByName nameMatch[1], (err, results) ->
+        if err?
+          msg.reply "I wasn't able to find any matching cards."
+        else
+          msg.send({
+            "attachments": [
+              {
+                "pretext": "Here are the cards I was able to find..."
+                "text": ("#{r.formattedString()}" for r in results).join("\r")
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
+
+    if numberMatch?
+      wallet.findByNumber numberMatch[1], (err, results) ->
+        if err?
+          msg.reply "I wasn't able to find any matching cards."
+        else
+          msg.send({
+            "attachments": [
+              {
+                "pretext": "Here are the cards I was able to find..."
+                "text": ("#{r.formattedString()}" for r in results).join("\r")
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
 
 # Classes
 
@@ -132,20 +163,32 @@ class Wallet
         callback "NoRobot"
     else
       callback "Empty"
+  
+  remove: (number, callback) ->
+    if @all().length > 0
+      results = @_findByNumber number
+      if results.length > 0
+        #Array::remove = (e) -> @[t..t] = [] if (t = @indexOf(e)) > -1
+        @giftcards[t..t] = [] if (t = @giftcards.indexOf(results[0])) > -1
+        callback "Success"
+      else
+        callback "NotFound"
+    else
+      callback "Empty"
 
   list: (callback) ->
     if @all().length > 0
       results = []
       for entry in @all()
         if entry?
-          results.push new Giftcard entry.name, entry.balance, entry.number, entry.pin, entry.categories
+          results.push new Giftcard entry.name, entry.balance, entry.number, entry.pin
       callback null, results
     else
       callback "No Giftcards exist"
 
   add: (gc, callback) ->
     if gc?
-      results = if @all().length > 0 then @_find gc.number else []
+      results = if @all().length > 0 then @_findByNumber gc.number else []
       if results.length > 0
         callback "Giftcard already exists"
       else
@@ -154,9 +197,34 @@ class Wallet
     else
       callback "Not a valid giftcard"
 
-  find: (numberExp, callback) ->
+  findByNumber: (numberExp, callback) ->
     if @all().length > 0
-      results = @_find numberExp
+      results = @_findByNumber numberExp
+      if results.length > 0
+        convertedResults = (new Giftcard r.name, r.balance, r.number, r.pin for r in results)
+        callback null, convertedResults
+      else
+        callback "No results found"
+    else
+      callback "Empty list"
+
+  _findByNumber: (numberExp) ->
+    exp = "^#{numberExp.replace /\*/g,".*"}$"
+    results = []
+    @all().forEach (gc) ->
+      if gc and gc.number
+        if RegExp(exp, "i").test gc.number
+          results.push gc
+    return results
+
+  findByName: (nameExp, callback) ->
+    if @all().length > 0
+      exp = "^#{nameExp.replace /\*/g,".*"}$"
+      results = []
+      @all().forEach (gc) ->
+        if gc and gc.name
+          if RegExp(exp, "i").test gc.name
+            results.push new Giftcard gc.name, gc.balance, gc.number, gc.pin
       if results.length > 0
         callback null, results
       else
@@ -164,28 +232,15 @@ class Wallet
     else
       callback "Empty list"
 
-  _find: (numberExp) ->
-    exp = "^#{numberExp.replace /\*/g,".*"}$"
-    results = []
-    @all().forEach (gc) ->
-      if gc and gc.number
-        if RegExp(exp, "i").test gc.number
-          results.push new Giftcard gc.name, gc.balance, gc.number, gc.pin, gc.categories
-    return results
-
 class Giftcard
-  constructor: (name, balance, number, pin, categories) ->
+  constructor: (name, balance, number, pin) ->
     @name = name
     @balance = balance
     @number = number
     @pin = pin
-    @categories = categories
 
   formattedString: ->
     balanceInDollars = (@balance / 100).toFixed(2)
     text = "*#{@name}*  $#{balanceInDollars}  #:#{@number}"
-    if @pin?
-      text += "  _p:#{@pin}_"
-    if @pin?
-      text += "  _c:#{@categories}_"
+    text += "  _p:#{@pin}_" if @pin?
     return text
