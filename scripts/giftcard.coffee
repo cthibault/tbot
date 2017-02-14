@@ -10,7 +10,7 @@
 #   hubot giftcard remove #:<number> - Removes giftcard from wallet (exact number required)
 #   hubot giftcard find ('<name>' | #:<number>) - Finds giftcard(s) by name or number (allow wildcards)
 # TODO
-#   hubot giftcard set balance on <number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
+#   hubot giftcard set balance on #:<number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
 #   hubot giftcard set name on <number> to '<name>' - Updates the name for a specific card (allow wildcard for number)
 #   hubot giftcard $<amount> transaction on <number> - Reduces the balance by the transacted amount for a specific card (allow wildcard for number)
 #
@@ -136,6 +136,44 @@ module.exports = (robot) ->
             ]
           })
 
+  robot.respond /(gc|giftcard(s?)) set balance .+/i, (msg) ->
+    numberMatch = msg.match[0].match /#:([\*\d]+)/i
+    balanceMatch = msg.match[0].match /\$(\S+)/i
+    
+    unless numberMatch? and balanceMatch?
+      msg.reply "You need to provide the card's Number and the new Balance. [#{numberMatch?}, #{balanceMatch?}]"
+    
+    wallet = new Wallet robot
+    wallet.updateBalance numberMatch[1], balanceMatch[1]*100, (errorKey, result) ->
+      switch errorKey
+        when "NotFound" then msg.reply "I'm unable to find that one..."
+        when "Empty" then msg.reply "You already don't trust me with anything"
+        when "TooManyMatching" then msg.send({ #"There are too many matching results to perform the balance update"
+            "attachments": [
+              {
+                "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
+                "text": ("#{r.formattedString()}" for r in result).join("\r")
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
+        when "Success" then msg.send({
+            "attachments": [
+              {
+                "pretext": "Thanks. I'll start tracking this card:"
+                "text": "#{result.formattedString()}"
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
+        else msg.reply "I'm unsure what happened: #{messageKey}"
+
 # Classes
 
 class Wallet
@@ -168,7 +206,6 @@ class Wallet
     if @all().length > 0
       results = @_findByNumber number
       if results.length > 0
-        #Array::remove = (e) -> @[t..t] = [] if (t = @indexOf(e)) > -1
         @giftcards[t..t] = [] if (t = @giftcards.indexOf(results[0])) > -1
         callback "Success"
       else
@@ -196,6 +233,21 @@ class Wallet
         callback null, "Giftcard added"
     else
       callback "Not a valid giftcard"
+
+  updateBalance: (number, balance, callback) ->
+    if @all().length > 0
+      results = @_findByNumber number
+      if results.length == 1
+        gc = new Giftcard results[0].name, balance, results[0].number, results[0].pin
+        @giftcards[t..t] = gc if (t = @giftcards.indexOf(results[0])) > -1
+        callback "Success", gc
+      else if results.length > 1
+        convertedResults = (new Giftcard r.name, r.balance, r.number, r.pin for r in results)
+        callback "TooManyMatching", convertedResults
+      else
+        callback "NotFound"
+    else
+      callback "Empty"
 
   findByNumber: (numberExp, callback) ->
     if @all().length > 0
