@@ -8,7 +8,7 @@
 #   hubot gc remove #:`nbr` - _Removes giftcard from wallet_
 #   hubot gc find ("`name`" | #:`nbr`) - _Finds giftcards by name or nbr (*)_
 #   hubot gc set balance on #:`nbr` to $`amt` - _Update balance for a single card (*)_
-#   hubot gc $`amt` transaction on #:`nbr` - _Reduce the balance by the amount for a single card (*)_
+#   hubot gc $`amt` transaction on #:`nbr` - _Reduce the balance by the amt for a single card (*)_
 #
 # Author
 #   curtistbone@gmail.com
