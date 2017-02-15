@@ -16,6 +16,12 @@
 ##
 ## HELPER METHODS
 ##
+sortBy = (key, a, b, r) ->
+  r = if r then 1 else -1
+  return -1*r if a[key] > b[key]
+  return +1*r if a[key] < b[key]
+  return 0
+
 processResultFindings = (err, results, msg) ->
   if err?
     msg.reply "I wasn't able to find any matching cards."
@@ -24,7 +30,7 @@ processResultFindings = (err, results, msg) ->
       "attachments": [
         {
           "pretext": "Here are the cards I was able to find..."
-          "text": ("#{r.formattedString()}" for r in results).join("\r")
+          "text": ("#{r.formattedString()}" for r in results.sort (a,b) -> sortBy 'name', a, b).join("\r")
           "mrkdwn_in": [
             "text",
             "pretext"
@@ -46,7 +52,7 @@ updateBalance = (number, amount, operation, wallet, msg) ->
           "attachments": [
             {
               "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
-              "text": ("#{r.formattedString()}" for r in result).join("\r")
+              "text": ("#{r.formattedString()}" for r in result.sort (a,b) -> sortBy 'name', a, b).join("\r")
               "mrkdwn_in": [
                 "text",
                 "pretext"
@@ -82,7 +88,7 @@ module.exports = (robot) ->
           "attachments": [
             {
               "pretext": "Here are the cards I'm aware of..."
-              "text": ("#{r.formattedString()}" for r in results).join("\r")
+              "text": ("#{r.formattedString()}" for r in results.sort (a,b) -> sortBy 'name', a, b).join("\r")
               "mrkdwn_in": [
                 "text",
                 "pretext"
