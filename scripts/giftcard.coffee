@@ -10,18 +10,12 @@
 #   hubot gc remove #:`nbr` - _Removes giftcard from wallet_
 #   hubot gc find ("`name`" | #:`nbr`) - _Finds giftcards by name or nbr (*)_
 #   hubot gc set balance on #:`nbr` to $`amt` - _Update balance for a single card (*)_
+#   hubot gc $`amt` transaction on #:`nbr` - _Reduce the balance by the amount for a single card (*)_
 #
 # Author
 #   curtistbone@gmail.com
 
-# TODO
-#   hubot giftcard $<amount> transaction on <number> - Reduces the balance by the transacted amount for a specific card (allow wildcard for number)
-
 module.exports = (robot) ->
-  #robot.respond /giftcard(s?) curtis/i, (msg) ->
-  #  wallet = new Wallet robot
-  #  
-
   robot.respond /(gc|giftcard(s?)) list/i, (msg) ->
     wallet = new Wallet robot
     wallet.list (err, results) -> 
@@ -144,11 +138,11 @@ module.exports = (robot) ->
       msg.reply "You need to provide the card's Number and the new Balance. [#{numberMatch?}, #{balanceMatch?}]"
     
     wallet = new Wallet robot
-    wallet.updateBalance numberMatch[1], balanceMatch[1]*100, (errorKey, result) ->
+    wallet.updateBalance numberMatch[1], balanceMatch[1]*100, "SET", (errorKey, result) ->
       switch errorKey
         when "NotFound" then msg.reply "I'm unable to find that one..."
         when "Empty" then msg.reply "You already don't trust me with anything"
-        when "TooManyMatching" then msg.send({ #"There are too many matching results to perform the balance update"
+        when "TooManyMatching" then msg.send({
             "attachments": [
               {
                 "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
@@ -163,7 +157,45 @@ module.exports = (robot) ->
         when "Success" then msg.send({
             "attachments": [
               {
-                "pretext": "Thanks. I'll start tracking this card:"
+                "pretext": "Thanks. I've updated the card:"
+                "text": "#{result.formattedString()}"
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
+        else msg.reply "I'm unsure what happened: #{messageKey}"
+
+  robot.respond /(gc|giftcard(s?)) .+ transaction .+/i, (msg) ->
+    numberMatch = msg.match[0].match /#:([\*\d]+)/i
+    transAmountMatch = msg.match[0].match /\$(\S+)/i
+    
+    unless numberMatch? and transAmountMatch?
+      msg.reply "You need to provide the card's Number and the transaction amount. [#{numberMatch?}, #{transAmountMatch?}]"
+    
+    wallet = new Wallet robot
+    wallet.updateBalance numberMatch[1], transAmountMatch[1]*100, "DEBIT", (errorKey, result) ->
+      switch errorKey
+        when "NotFound" then msg.reply "I'm unable to find that one..."
+        when "Empty" then msg.reply "You already don't trust me with anything"
+        when "TooManyMatching" then msg.send({
+            "attachments": [
+              {
+                "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
+                "text": ("#{r.formattedString()}" for r in result).join("\r")
+                "mrkdwn_in": [
+                  "text",
+                  "pretext"
+                ]
+              }
+            ]
+          })
+        when "Success" then msg.send({
+            "attachments": [
+              {
+                "pretext": "Thanks. I've updated the card:"
                 "text": "#{result.formattedString()}"
                 "mrkdwn_in": [
                   "text",
@@ -234,11 +266,17 @@ class Wallet
     else
       callback "Not a valid giftcard"
 
-  updateBalance: (number, balance, callback) ->
+  updateBalance: (number, amount, operation, callback) ->
     if @all().length > 0
       results = @_findByNumber number
       if results.length == 1
-        gc = new Giftcard results[0].name, balance, results[0].number, results[0].pin
+        updatedBalance = amount
+        switch operation
+          when "SET" then updatedBalance = amount
+          when "DEBIT" then updatedBalance = results[0].balance - amount
+          when "CREDIT" then updatedBalance = results[0].balance + amount
+          else updatedBalance = results[0].balance
+        gc = new Giftcard results[0].name, updatedBalance, results[0].number, results[0].pin
         @giftcards[t..t] = gc if (t = @giftcards.indexOf(results[0])) > -1
         callback "Success", gc
       else if results.length > 1
