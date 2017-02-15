@@ -12,10 +12,21 @@
 #
 # Author
 #   curtistbone@gmail.com
+#
+# Notes
+#   In order to use the methods within this module, the user must have the role of parent
+#
 
 ##
 ## HELPER METHODS
 ##
+
+auth = (robot, msg) ->
+  unless robot.auth.hasRole(msg.envelope.user, "parent")
+    msg.reply "Sorry, but you aren't my boss... :stuck_out_tongue:"
+    return false
+  return true
+
 sortBy = (key, a, b, r) ->
   r = if r then 1 else -1
   return -1*r if a[key] > b[key]
@@ -79,6 +90,9 @@ updateBalance = (number, amount, operation, wallet, msg) ->
 ##
 module.exports = (robot) ->
   robot.respond /(gc|giftcard(s?)) list/i, (msg) ->
+    unless auth robot, msg
+      return
+
     wallet = new Wallet robot
     wallet.list (err, results) -> 
       if err?
@@ -98,6 +112,9 @@ module.exports = (robot) ->
         })
 
   robot.respond /(gc|giftcard(s?)) add .+/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     nameMatch = msg.match[0].match /['"](.+)['"]/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     numberMatch = msg.match[0].match /#:(\d+)/i
@@ -127,6 +144,9 @@ module.exports = (robot) ->
         })
 
   robot.respond /(gc|giftcard(s?)) remove all/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     wallet = new Wallet robot
     wallet.clear (messageKey) ->
       switch messageKey
@@ -136,6 +156,9 @@ module.exports = (robot) ->
         else msg.reply "I'm unsure what happened: #{messageKey}"
 
   robot.respond /(gc|giftcard(s?)) remove #:(\d+)/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     number = msg.match[3]
     if number?
       wallet = new Wallet robot
@@ -147,6 +170,9 @@ module.exports = (robot) ->
           else msg.reply "I'm unsure what happened: #{messageKey}"
 
   robot.respond /(gc|giftcard(s?)) find .+/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     nameMatch = msg.match[0].match /['"](.+)['"]/i
     numberMatch = msg.match[0].match /#:([\*\d]+)/i
     
@@ -163,6 +189,9 @@ module.exports = (robot) ->
         processResultFindings err, results, msg
 
   robot.respond /(gc|giftcard(s?)) set balance .+/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     numberMatch = msg.match[0].match /#:([\*\d]+)/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     
@@ -173,6 +202,9 @@ module.exports = (robot) ->
     updateBalance numberMatch[1], balanceMatch[1], "SET", wallet, msg
 
   robot.respond /(gc|giftcard(s?)) .+ transaction .+/i, (msg) ->
+    unless auth robot, msg
+      return
+    
     numberMatch = msg.match[0].match /#:([\*\d]+)/i
     transAmountMatch = msg.match[0].match /\$(\S+)/i
     
