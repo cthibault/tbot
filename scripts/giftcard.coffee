@@ -1,7 +1,5 @@
 # Description:
 #   Manage your giftcard collection. GiftCards get stored in the robot brain
-#   Also keeps a history of all transactions and automatically updates giftcard
-#   balance 
 #
 # Commands:
 #   hubot gc list - _Lists stored giftcards_
