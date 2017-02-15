@@ -4,18 +4,18 @@
 #   balance 
 #
 # Commands:
-#   hubot giftcard list - Lists stored giftcards
-#   hubot giftcard add '<name>' with $<balance> and #:<number> (p:<pin>) - Adds a new giftcard to your wallet. <pin> is optional
-#   hubot giftcard remove all - Removes all giftcards from wallet
-#   hubot giftcard remove #:<number> - Removes giftcard from wallet (exact number required)
-#   hubot giftcard find ('<name>' | #:<number>) - Finds giftcard(s) by name or number (allow wildcards)
-# TODO
-#   hubot giftcard set balance on #:<number> to $<balance> - Updates the balance for a specific card (allow wildcard for number)
-#   hubot giftcard set name on <number> to '<name>' - Updates the name for a specific card (allow wildcard for number)
-#   hubot giftcard $<amount> transaction on <number> - Reduces the balance by the transacted amount for a specific card (allow wildcard for number)
+#   hubot gc list - _Lists stored giftcards_
+#   hubot gc add "`name`" with $`amt` and #:`nbr` (p:`pin`) - _Adds giftcard to your wallet (optional <pin>)_
+#   hubot gc remove all - _Removes all giftcards from wallet_
+#   hubot gc remove #:`nbr` - _Removes giftcard from wallet_
+#   hubot gc find ("`name`" | #:`nbr`) - _Finds giftcards by name or nbr (*)_
+#   hubot gc set balance on #:`nbr` to $`amt` - _Update balance for a single card (*)_
 #
 # Author
 #   curtistbone@gmail.com
+
+# TODO
+#   hubot giftcard $<amount> transaction on <number> - Reduces the balance by the transacted amount for a specific card (allow wildcard for number)
 
 module.exports = (robot) ->
   #robot.respond /giftcard(s?) curtis/i, (msg) ->
