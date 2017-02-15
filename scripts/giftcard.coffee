@@ -15,6 +15,64 @@
 # Author
 #   curtistbone@gmail.com
 
+##
+## HELPER METHODS
+##
+processResultFindings = (err, results, msg) ->
+  if err?
+    msg.reply "I wasn't able to find any matching cards."
+  else
+    msg.send({
+      "attachments": [
+        {
+          "pretext": "Here are the cards I was able to find..."
+          "text": ("#{r.formattedString()}" for r in results).join("\r")
+          "mrkdwn_in": [
+            "text",
+            "pretext"
+          ]
+        }
+      ]
+    })
+
+updateBalance = (number, amount, operation, wallet, msg) ->
+  unless wallet?
+    msg.reply "I can't seem to find my wallet"
+    return
+
+  wallet.updateBalance number, amount*100, operation, (errorKey, result) ->
+    switch errorKey
+      when "NotFound" then msg.reply "I'm unable to find that one..."
+      when "Empty" then msg.reply "You already don't trust me with anything"
+      when "TooManyMatching" then msg.send({
+          "attachments": [
+            {
+              "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
+              "text": ("#{r.formattedString()}" for r in result).join("\r")
+              "mrkdwn_in": [
+                "text",
+                "pretext"
+              ]
+            }
+          ]
+        })
+      when "Success" then msg.send({
+          "attachments": [
+            {
+              "pretext": "Thanks. I've updated the card:"
+              "text": "#{result.formattedString()}"
+              "mrkdwn_in": [
+                "text",
+                "pretext"
+              ]
+            }
+          ]
+        })
+      else msg.reply "I'm unsure what happened: #{messageKey}"
+
+##
+## ROBOT LISTENERS
+##
 module.exports = (robot) ->
   robot.respond /(gc|giftcard(s?)) list/i, (msg) ->
     wallet = new Wallet robot
@@ -39,12 +97,11 @@ module.exports = (robot) ->
     nameMatch = msg.match[0].match /['"](.+)['"]/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     numberMatch = msg.match[0].match /#:(\d+)/i
+    pinMatch = msg.match[0].match /p:(\d+)/i
 
     unless nameMatch? and balanceMatch? and numberMatch?
       msg.reply "You need to provide the card's Name, Balance, and Number for me to add the card to your wallet [#{nameMatch?}, #{balanceMatch?}, #{numberMatch?}]"
-    
-    pinMatch = msg.match[0].match /p:(\d+)/i
-    
+
     gc = new Giftcard nameMatch[1], balanceMatch[1]*100, numberMatch[1], pinMatch?[1]
     wallet = new Wallet robot
 
@@ -96,118 +153,34 @@ module.exports = (robot) ->
 
     if nameMatch?
       wallet.findByName nameMatch[1], (err, results) ->
-        if err?
-          msg.reply "I wasn't able to find any matching cards."
-        else
-          msg.send({
-            "attachments": [
-              {
-                "pretext": "Here are the cards I was able to find..."
-                "text": ("#{r.formattedString()}" for r in results).join("\r")
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
-
-    if numberMatch?
+        processResultFindings err, results, msg
+    else if numberMatch?
       wallet.findByNumber numberMatch[1], (err, results) ->
-        if err?
-          msg.reply "I wasn't able to find any matching cards."
-        else
-          msg.send({
-            "attachments": [
-              {
-                "pretext": "Here are the cards I was able to find..."
-                "text": ("#{r.formattedString()}" for r in results).join("\r")
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
+        processResultFindings err, results, msg
 
   robot.respond /(gc|giftcard(s?)) set balance .+/i, (msg) ->
     numberMatch = msg.match[0].match /#:([\*\d]+)/i
     balanceMatch = msg.match[0].match /\$(\S+)/i
     
     unless numberMatch? and balanceMatch?
-      msg.reply "You need to provide the card's Number and the new Balance. [#{numberMatch?}, #{balanceMatch?}]"
+      msg.reply "You need to provide the card's Number and the new Balance."
     
     wallet = new Wallet robot
-    wallet.updateBalance numberMatch[1], balanceMatch[1]*100, "SET", (errorKey, result) ->
-      switch errorKey
-        when "NotFound" then msg.reply "I'm unable to find that one..."
-        when "Empty" then msg.reply "You already don't trust me with anything"
-        when "TooManyMatching" then msg.send({
-            "attachments": [
-              {
-                "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
-                "text": ("#{r.formattedString()}" for r in result).join("\r")
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
-        when "Success" then msg.send({
-            "attachments": [
-              {
-                "pretext": "Thanks. I've updated the card:"
-                "text": "#{result.formattedString()}"
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
-        else msg.reply "I'm unsure what happened: #{messageKey}"
+    updateBalance numberMatch[1], balanceMatch[1], "SET", wallet, msg
 
   robot.respond /(gc|giftcard(s?)) .+ transaction .+/i, (msg) ->
     numberMatch = msg.match[0].match /#:([\*\d]+)/i
     transAmountMatch = msg.match[0].match /\$(\S+)/i
     
     unless numberMatch? and transAmountMatch?
-      msg.reply "You need to provide the card's Number and the transaction amount. [#{numberMatch?}, #{transAmountMatch?}]"
+      msg.reply "You need to provide the card's Number and the transaction amount."
     
     wallet = new Wallet robot
-    wallet.updateBalance numberMatch[1], transAmountMatch[1]*100, "DEBIT", (errorKey, result) ->
-      switch errorKey
-        when "NotFound" then msg.reply "I'm unable to find that one..."
-        when "Empty" then msg.reply "You already don't trust me with anything"
-        when "TooManyMatching" then msg.send({
-            "attachments": [
-              {
-                "pretext": "There are too many matching results to perform the balance update.\rHere are the cards I was able to find..."
-                "text": ("#{r.formattedString()}" for r in result).join("\r")
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
-        when "Success" then msg.send({
-            "attachments": [
-              {
-                "pretext": "Thanks. I've updated the card:"
-                "text": "#{result.formattedString()}"
-                "mrkdwn_in": [
-                  "text",
-                  "pretext"
-                ]
-              }
-            ]
-          })
-        else msg.reply "I'm unsure what happened: #{messageKey}"
+    updateBalance numberMatch[1], transAmountMatch[1], "DEBIT", wallet, msg
 
-# Classes
-
+##
+## WALLET CLASS
+##
 class Wallet
   constructor: (robot) ->
     @robot = robot
@@ -322,6 +295,9 @@ class Wallet
     else
       callback "Empty list"
 
+##
+## GIFTCARD CLASS
+##
 class Giftcard
   constructor: (name, balance, number, pin) ->
     @name = name
