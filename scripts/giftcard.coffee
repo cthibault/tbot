@@ -20,9 +20,9 @@
 ##
 ## HELPER METHODS
 ##
-
 auth = (robot, msg) ->
-  unless robot.auth.hasRole(msg.envelope.user, "parent")
+  usr = robot.brain.userForId msg.envelope.user.id
+  unless robot.auth.hasRole(usr, 'parent')
     msg.reply "Sorry, but you aren't my boss... :stuck_out_tongue:"
     return false
   return true
@@ -342,7 +342,7 @@ class Giftcard
     @pin = pin
 
   formattedString: ->
-    balanceInDollars = (@balance / 100).toFixed(2)
+    balanceInDollars = (@balance / 100).toFixed(2)    
     text = "*#{@name}*  $#{balanceInDollars}  #:#{@number}"
     text += "  _p:#{@pin}_" if @pin?
     return text
