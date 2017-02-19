@@ -342,7 +342,5 @@ class Giftcard
     @pin = pin
 
   formattedString: ->
-    balanceInDollars = (@balance / 100).toFixed(2)    
-    text = "*#{@name}*  $#{balanceInDollars}  #:#{@number}"
-    text += "  _p:#{@pin}_" if @pin?
-    return text
+    balanceInDollars = (@balance / 100).toFixed(2)
+    return  "$#{balanceInDollars}  *#{@name}*  #:*#{@number.substr(@number.length - 4, 4)}"
