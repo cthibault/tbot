@@ -1,6 +1,9 @@
 # Description:
 #   Manage your giftcard collection. GiftCards get stored in the robot brain
 #
+# Configuration:
+#   HUBOT_GC_ROOMS_WHITELIST - a comma separated list of whitelisted room IDs
+#
 # Commands:
 #   hubot gc list - _Lists stored giftcards_
 #   hubot gc add "`name`" with $`amt` and #:`nbr` (p:`pin`) - _Adds giftcard to your wallet (optional <pin>)_
@@ -14,17 +17,31 @@
 #   curtistbone@gmail.com
 #
 # Notes
+#   The commands can only be run in whitelisted rooms. This helps protect visibility of the data
 #   In order to use the methods within this module, the user must have the role of parent
 #
 
 ##
 ## HELPER METHODS
 ##
+config = 
+  whitelisted_rooms = process.env.HUBOT_GC_ROOMS_WHITELIST
+
 auth = (robot, msg) ->
   usr = robot.brain.userForId msg.envelope.user.id
   unless robot.auth.hasRole(usr, 'parent')
     msg.reply "Sorry, but you aren't my boss... :stuck_out_tongue:"
     return false
+
+  unless process.env.HUBOT_GC_ROOMS_WHITELIST?
+    robot.logger.warning 'The HUBOT_GC_ROOMS_WHITELIST environment variable not set'
+
+  whitelisted_rooms = if process.env.HUBOT_GC_ROOMS_WHITELIST? then process.env.HUBOT_GC_ROOMS_WHITELIST.split ',' else []
+
+  unless msg.envelope.room in whitelisted_rooms
+    msg.reply "Sorry, but it isn't safe to talk here..."
+    return false;
+
   return true
 
 sortBy = (key, a, b, r) ->
@@ -71,6 +88,7 @@ updateBalance = (number, amount, operation, wallet, msg) ->
             }
           ]
         })
+      when "CardEmpty" then msg.reply "Thanks. That card is now empty and has been thrown away."
       when "Success" then msg.send({
           "attachments": [
             {
@@ -92,7 +110,7 @@ module.exports = (robot) ->
   robot.respond /(gc|giftcard(s?)) list/i, (msg) ->
     unless auth robot, msg
       return
-
+      
     wallet = new Wallet robot
     wallet.list (err, results) -> 
       if err?
@@ -285,9 +303,14 @@ class Wallet
           when "DEBIT" then updatedBalance = results[0].balance - amount
           when "CREDIT" then updatedBalance = results[0].balance + amount
           else updatedBalance = results[0].balance
-        gc = new Giftcard results[0].name, updatedBalance, results[0].number, results[0].pin
-        @giftcards[t..t] = gc if (t = @giftcards.indexOf(results[0])) > -1
-        callback "Success", gc
+
+        if updatedBalance > 0
+          gc = new Giftcard results[0].name, updatedBalance, results[0].number, results[0].pin
+          @giftcards[t..t] = gc if (t = @giftcards.indexOf(results[0])) > -1
+          callback "Success", gc
+        else
+          @giftcards[t..t] = [] if (t = @giftcards.indexOf(results[0])) > -1
+          callback "CardEmpty", gc
       else if results.length > 1
         convertedResults = (new Giftcard r.name, r.balance, r.number, r.pin for r in results)
         callback "TooManyMatching", convertedResults
@@ -343,4 +366,6 @@ class Giftcard
 
   formattedString: ->
     balanceInDollars = (@balance / 100).toFixed(2)
-    return  "$#{balanceInDollars}  *#{@name}*  #:*#{@number.substr(@number.length - 4, 4)}"
+    text = "$#{balanceInDollars}  *#{@name}*  #:#{@number}"
+    text += "  _p:#{@pin}_" if @pin?
+    return text
