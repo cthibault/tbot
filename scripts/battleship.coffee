@@ -121,6 +121,12 @@ sortByValue = (a, b, r) ->
 sortByKey = (key, a, b, r) ->
   return sortByValue a[key], b[key], r
 
+roundNumber = (number, precision) ->
+  precision = if precision? then Math.abs(precision) else 0
+  multiplier = Math.pow(10, precision)
+  result = Math.round(number * multiplier) / multiplier
+  return result
+
 ##
 ## MODULE
 ##
@@ -130,42 +136,96 @@ module.exports = (robot) ->
 ## MODULE HELPER FUNCTIONS
 ##
   getBattleKey = (name1, name2) -> 
-    return ([name1,name2].sort (a,b) -> sortByValue a, b).join("||")
-
-  getBattleInfo = (challenger, challenged) ->
-    battleKey = getBattleKey challenger, challenged
-    console.log "BattleKey: #{battleKey}"
-
-    robot.brain.data.battleship ?= {}
-    robot.brain.data.battleship[battleKey] ?= {
-      stats: new BattleStats()
-      battle: null
-    }
-
-    return robot.brain.data.battleship[battleKey]
+    key = ([name1,name2].sort (a,b) -> sortByValue a, b).join("||")
+    console.log "BattleKey: #{key}"
+    return key
 
   getBattle = (challenger, challenged) ->
-    battleInfo = getBattleInfo challenger, challenged
-    return battleInfo.battle
+    battleKey = getBattleKey challenger, challenged
 
-  getBattleStats = (challenger, challenged) ->
-    battleInfo = getBattleInfo challenger, challenged
-    return battleInfo.stats
+    robot.brain.data.battleship ?= {}
+    battle = robot.brain.data.battleship[battleKey]
+    return battle
 
   startBattle = (challenger, challenged) ->
-    battleInfo = getBattleInfo challenger, challenged
-    if battleInfo.battle?.status is not "game-over"
+    battle = getBattle challenger, challenged
+    if battle?.status is not "game-over"
       return {
         success: false
-        battle: battleInfo.battle
+        battle: battle
       }
-
+    
     console.log "Starting new battle..."
-    battleInfo.battle = new Battle challenger, challenged
+    battleKey = getBattleKey challenger, challenged
+    battle = new Battle challenger, challenged
+    robot.brain.data.battleship[battleKey] = battle
     return {
       success: true
-      battle: battleInfo.battle
+      battle: battle
     }
+
+  getPlayerStats = (name) ->
+    robot.brain.data.battleship ?= {}
+    robot.brain.data.battleship[name] ?= {
+      username: name
+      gamesPlayed: 0
+      wins: 0
+      totalShots: 0
+      totalHits: 0
+      hitPerc: 0
+      shipsSunk: 0
+    }
+
+  computeAndRecordBattleStats = (battle) ->
+    stats = {}
+
+    for p in battle.players
+      battleStats = {
+        shots: p.shotsFired.length
+        hits: (s for s in p.shotsFired when s.hit).length
+        shipsSunk: (s for s in p.ships when s.health is 0).length
+      }
+      battleStats.hitPerc = roundNumber (battleStats.hits/battleStats.shots * 100), 2
+
+      playerStats = getPlayerStats p.username
+      if playerStats?
+        playerStats.gamesPlayed++
+        playerStats.wins = playerStats.wins + 1 if battleStats.shipsSunk is 5
+        playerStats.totalShots += battleStats.shots
+        playerStats.totalHits += battleStats.hits
+        playerStats.hitPerc = roundNumber (playerStats.totalHits/playerStats.totalShots * 100), 2
+        playerStats.shipsSunk += battleStats.shipsSunk
+
+      stats[p.username] = {
+        battle: battleStats
+        overall: playerStats
+      }
+
+    console.log stats
+    
+    return stats
+
+  prettyprintStats = (stats) ->
+    unless stats?
+      return null
+    
+    lines = [
+      "Battle Stats"
+      "```Shots : #{stats.battle.shots}"
+      "Hits  : #{stats.battle.hits}"
+      "Hit % : #{stats.battle.hitPerc}```"
+      "Overall Stats"
+      "```Games : #{stats.overall.gamesPlayed}"
+      "Wins  : #{stats.overall.wins}"
+      "Shots : #{stats.overall.totalShots}"
+      "Hits  : #{stats.overall.totalHits}"
+      "Hit % : #{stats.overall.hitPerc}"
+      "Ships Sunk: #{stats.overall.shipsSunk}```"
+    ]
+
+    output = lines.join("\r")
+    console.log output
+    return output
 
   prettyprintShips = (player) ->
     unless player?.ships?
@@ -286,11 +346,11 @@ module.exports = (robot) ->
       @challenged = challenged
       @state = 'challenge'
       @currentPlayer = challenged
-      @playersCompletedSetup = []
 
       @players = [
         {
           username: challenger
+          isReady: false
           ships: [
             {
               id: 1
@@ -363,6 +423,7 @@ module.exports = (robot) ->
         },
         {
           username: challenged
+          isReady: false
           ships: [
             {
               id: 1
@@ -606,9 +667,9 @@ module.exports = (robot) ->
         player = (p for p in battle.players when p.username is actor)[0]
         arePlayersShipsDeployed = (s for s in player.ships when not s.deployed).length == 0
         if arePlayersShipsDeployed
-          if actor not in battle.playersCompletedSetup
-            battle.playersCompletedSetup.push actor
-            if battle.playersCompletedSetup.length == 2
+          if not player.isReady
+            player.isReady = true
+            if (p for p in battle.players when p.isReady).length is 2
               #everyone is ready
               battle.state = "battle"
               commonMessage = "It's time!  All ships have been deployed and everyone is ready."
@@ -637,7 +698,7 @@ module.exports = (robot) ->
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
 #  hubot Fire <coord> against <user>
-  robot.respond /Fire ([a-jA-J]\d) (against|at) @?(.+)/i, (msg) ->
+  robot.respond /Fire ([a-jA-J]\d)(\sagainst|\sat)? @?(.+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[3].trim().toLowerCase()
     targetCoord = msg.match[1].trim().toLowerCase()
@@ -649,6 +710,7 @@ module.exports = (robot) ->
     battle = getBattle actor, opponent
     
     if battle?
+      console.log "State: #{battle.state}"
       if battle.state is "battle"
         if battle.currentPlayer is actor
           targetCoordinate = convertCoordinate targetCoord
@@ -670,7 +732,7 @@ module.exports = (robot) ->
                 newCellValue: ""
                 hitShipName: null
                 sunk: false
-                remainingShipCount: 5
+                isGameover: false
               }
 
               if cellValue is "-"
@@ -689,7 +751,9 @@ module.exports = (robot) ->
                 result.newCellValue = "x"
                 result.hitShipName = hitShip.name
                 result.sunk = hitShip.health is 0
-                result.remainingShipCount = (s for s in opponentPlayer.ships when s.health > 0).length
+                result.isGameover = (s for s in opponentPlayer.ships when s.health > 0).length is 0
+              
+              console.log result
               
               # Update game objects
               actorPlayer.shotsFired.push {
@@ -698,30 +762,34 @@ module.exports = (robot) ->
               }
               actorPlayer.boards.shots[targetCoordinate.row][targetCoordinate.col] = result.newCellValue
               opponentPlayer.boards.ships[targetCoordinate.row][targetCoordinate.col] = result.newCellValue
-              
-              if result.remainingShipCount is 0
+
+              if result.isGameover
                 battle.state = "game-over"
+                stats = computeAndRecordBattleStats battle
+                statsOutput = {}
+                statsOutput[actor] = prettyprintStats stats[actor]
+                statsOutput[opponent] = prettyprintStats stats[opponent]
               else
                 battle.currentPlayer = opponent
 
               # build message for ACTOR
               actorMessage = "#{result.text}!"
               actorMessage += "  You sunk their #{result.hitShipName}!" if result.sunk
-              actorMessage += "\rYou sunk all @#{opponent} ships!  You are *VICTORIOUS!*" if result.remainingShipCount is 0
+              actorMessage += "\rYou sunk all @#{opponent} ships!  You are *VICTORIOUS!*" if result.isGameover
               
-              actorBoard = if result.remainingShipCount > 0 then prettyprintBoard actorPlayer, { shots:true } else prettyprintBoard actorPlayer
-              # TODO: actorBattleStats 
-              msg.reply "#{actorMessage}\r#{actorBoard}"
+              actorBoard = if result.isGameover then prettyprintBoard actorPlayer else prettyprintBoard actorPlayer, { shots:true }
+              actorStats = if result.isGameover then "\r\rHere are your stats:\r#{statsOutput?[actor]}\r\rHere are @#{opponent} stats:\r#{statsOutput?[opponent]}" else ""
+              msg.reply "#{actorMessage}\r#{actorBoard}#{actorStats}"
 
               # build message for OPPONENT
               opponentUser = robot.brain.userForName opponent
               opponentMessage = "@#{actor} fired at #{targetCoord.toUpperCase()} and it was a #{result.text}!"
               opponentMessage += "  They #{if result.sunk then "sunk" else "hit"} your #{result.hitShipName}!" if result.hit              
-              opponentMessage += if result.remainingShipCount > 0 then "\rNow it is your turn.  Fire when ready..." else "\rUnfortunately that was your last ship.  You've been *DEFEATED*"
+              opponentMessage += if result.isGameover then "\rUnfortunately that was your last ship.  You've been *DEFEATED*" else "\rNow it is your turn.  Fire when ready..."
               
               opponentBoard = prettyprintBoard opponentPlayer
-              # TODO: opponentBattleStats
-              robot.send opponentUser, "#{opponentMessage}\r#{opponentBoard}"
+              opponentStats = if result.isGameover then "\r\rHere are your stats:\r#{statsOutput?[opponent]}\r\rHere are @#{actor} stats:\r#{statsOutput?[actor]}" else ""
+              robot.send opponentUser, "#{opponentMessage}\r#{opponentBoard}#{opponentStats}"
           else
             msg.reply "Those coordinates don't make any sense.  Try again!"
         else
@@ -736,3 +804,31 @@ module.exports = (robot) ->
   robot.respond /reset bs/i, (msg) ->
     robot.brain.data.battleship = {}
     msg.reply "Battleship Brain reset..."
+
+  robot.respond /fix bs @?(.+)/i, (msg) ->
+    actor = msg.message.user.name.toLowerCase()
+    opponent = msg.match[1].trim().toLowerCase()
+
+    console.log "Actor: #{actor}"
+    console.log "Opponent: #{opponent}"
+
+    battle = getBattle actor, opponent
+    if battle?
+      battle.state = "battle"
+      msg.reply "Battle.State = battle"
+
+  robot.respond /get my stats/i, (msg) ->
+    actor = msg.message.user.name.toLowerCase()
+
+    console.log "Actor: #{actor}"
+
+    stats = getPlayerStats actor
+    console.log stats
+
+  robot.respond /clear stats/i, (msg) ->
+    actor = msg.message.user.name.toLowerCase()
+
+    console.log "Actor: #{actor}"
+
+    robot.brain.data.battleship[actor] = null
+    msg.reply "Cleared stats for @#{actor}"
