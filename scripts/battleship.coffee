@@ -698,7 +698,7 @@ module.exports = (robot) ->
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
 #  hubot Fire <coord> against <user>
-  robot.respond /Fire ([a-jA-J]\d)(\sagainst|\sat)? @?(.+)/i, (msg) ->
+  robot.respond /Fire ([a-jA-J]\d) (against|at)?\s?@?(.+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[3].trim().toLowerCase()
     targetCoord = msg.match[1].trim().toLowerCase()
