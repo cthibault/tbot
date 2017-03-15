@@ -2,14 +2,14 @@
 #   Play battleship
 #
 # Commands:
-#   [battleship] hubot I challenge <user> to battleship
-#   [battleship] hubot I accept <user> challenge
-#   [battleship] hubot Deploy <ship name> to <start-coord>:<end:coord> against <user>
-#   [battleship] hubot I'm ready to battle <user>
-#   [battleship] hubot Fire <coord> at <user>
-#   [battleship] hubot Show my board|shots|ships against <user>
-#   [battleship] hubot I surrender to <user>
-#   [battleship] hubot How do I setup my ships
+#   hubot [battleship] I challenge <user> to battleship
+#   hubot [battleship] I accept <user> challenge
+#   hubot [battleship] Deploy <ship name> to <start-coord>:<end:coord> against <user>
+#   hubot [battleship] I'm ready to battle <user>
+#   hubot [battleship] Fire <coord> at <user>
+#   hubot [battleship] Show my board|shots|ships against <user>
+#   hubot [battleship] I surrender to <user>
+#   hubot [battleship] How do I setup my ships
 #
 # Author
 #   curtistbone@gmail.com
