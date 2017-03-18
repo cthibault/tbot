@@ -8,6 +8,7 @@
 #   hubot [battleship] I'm ready to battle <user>
 #   hubot [battleship] Fire <coord> at <user>
 #   hubot [battleship] Show my board|shots|ships against <user>
+#   hubot [battleship] Get my stats
 #   hubot [battleship] I surrender to <user>
 #   hubot [battleship] How do I setup my ships
 #
@@ -206,24 +207,27 @@ module.exports = (robot) ->
     
     return stats
 
-  prettyprintStats = (stats) ->
-    unless stats?
+  prettyprintStats = (battleStats, playerStats) ->
+    unless battleStats? or playerStats?
       return null
     
-    lines = [
-      "BATTLE STATS:"
-      "> Shots : #{stats.battle.shots}"
-      "> Hits  : #{stats.battle.hits}"
-      "> Hit % : #{stats.battle.hitPerc}"
-      "> Ships Sunk: #{stats.battle.shipsSunk}"
-      "OVERALL STATS:"
-      "> Games : #{stats.overall.gamesPlayed}"
-      "> Wins  : #{stats.overall.wins}"
-      "> Shots : #{stats.overall.totalShots}"
-      "> Hits  : #{stats.overall.totalHits}"
-      "> Hit % : #{stats.overall.hitPerc}"
-      "> Ships Sunk: #{stats.overall.shipsSunk}"
-    ]
+    lines = []
+
+    if battleStats?
+      lines.push "BATTLE STATS:"
+      lines.push "> Shots : #{stats.battle.shots}"
+      lines.push "> Hits  : #{stats.battle.hits}"
+      lines.push "> Hit % : #{stats.battle.hitPerc}"
+      lines.push "> Ships Sunk: #{stats.battle.shipsSunk}"
+      
+    if playerStats?
+      lines.push "OVERALL STATS:"
+      lines.push "> Games : #{stats.overall.gamesPlayed}"
+      lines.push "> Wins  : #{stats.overall.wins}"
+      lines.push "> Shots : #{stats.overall.totalShots}"
+      lines.push "> Hits  : #{stats.overall.totalHits}"
+      lines.push "> Hit % : #{stats.overall.hitPerc}"
+      lines.push "> Ships Sunk: #{stats.overall.shipsSunk}"
 
     output = lines.join("\r")
     console.log output
@@ -699,7 +703,7 @@ module.exports = (robot) ->
     else
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
-#  hubot Fire <coord> against <user>
+# hubot Fire <coord> against <user>
   robot.respond /Fire ([a-jA-J]\d) (against|at)?\s?@?(.+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[3].trim().toLowerCase()
@@ -769,8 +773,8 @@ module.exports = (robot) ->
                 battle.state = "game-over"
                 stats = computeAndRecordBattleStats battle
                 statsOutput = {}
-                statsOutput[actor] = prettyprintStats stats[actor]
-                statsOutput[opponent] = prettyprintStats stats[opponent]
+                statsOutput[actor] = prettyprintStats stats[actor].battle, stats[actor].overall
+                statsOutput[opponent] = prettyprintStats stats[opponent].battle, stats[opponent].overall
               else
                 battle.currentPlayer = opponent
 
@@ -801,6 +805,17 @@ module.exports = (robot) ->
     else
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
+# hubot Get my stats
+  robot.respond /get my stats/i, (msg) ->
+    actor = msg.message.user.name.toLowerCase()
+
+    console.log "Actor: #{actor}"
+
+    stats = getPlayerStats actor
+    console.log stats
+    statsMessage = prettyprintStats null, stats
+    msg.reply "Here is where you stand:\r#{statsMessage}"
+
 
 # hubot reset bs
   robot.respond /reset bs/i, (msg) ->
@@ -819,13 +834,6 @@ module.exports = (robot) ->
       battle.state = "battle"
       msg.reply "Battle.State = battle"
 
-  robot.respond /get my stats/i, (msg) ->
-    actor = msg.message.user.name.toLowerCase()
-
-    console.log "Actor: #{actor}"
-
-    stats = getPlayerStats actor
-    console.log stats
 
   robot.respond /clear stats/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
