@@ -149,18 +149,18 @@ module.exports = (robot) ->
 
   startBattle = (challenger, challenged) ->
     battle = getBattle challenger, challenged
-    if battle?.status is not "game-over"
+    if not battle? or battle.status is "game-over"
+      console.log "Starting new battle..."
+      battleKey = getBattleKey challenger, challenged
+      battle = new Battle challenger, challenged
+      robot.brain.data.battleship[battleKey] = battle
       return {
-        success: false
+        success: true
         battle: battle
       }
-    
-    console.log "Starting new battle..."
-    battleKey = getBattleKey challenger, challenged
-    battle = new Battle challenger, challenged
-    robot.brain.data.battleship[battleKey] = battle
+
     return {
-      success: true
+      success: false
       battle: battle
     }
 
@@ -180,10 +180,11 @@ module.exports = (robot) ->
     stats = {}
 
     for p in battle.players
+      otherPlayer = (op for op in battle.players when op.username is not p.username)[0]
       battleStats = {
         shots: p.shotsFired.length
         hits: (s for s in p.shotsFired when s.hit).length
-        shipsSunk: (s for s in p.ships when s.health is 0).length
+        shipsSunk: (s for s in op.ships when s.health is 0).length
       }
       battleStats.hitPerc = roundNumber (battleStats.hits/battleStats.shots * 100), 2
 
@@ -210,17 +211,18 @@ module.exports = (robot) ->
       return null
     
     lines = [
-      "Battle Stats"
-      "```Shots : #{stats.battle.shots}"
-      "Hits  : #{stats.battle.hits}"
-      "Hit % : #{stats.battle.hitPerc}```"
-      "Overall Stats"
-      "```Games : #{stats.overall.gamesPlayed}"
-      "Wins  : #{stats.overall.wins}"
-      "Shots : #{stats.overall.totalShots}"
-      "Hits  : #{stats.overall.totalHits}"
-      "Hit % : #{stats.overall.hitPerc}"
-      "Ships Sunk: #{stats.overall.shipsSunk}```"
+      "BATTLE STATS:"
+      "> Shots : #{stats.battle.shots}"
+      "> Hits  : #{stats.battle.hits}"
+      "> Hit % : #{stats.battle.hitPerc}"
+      "> Ships Sunk: #{stats.battle.shipsSunk}"
+      "OVERALL STATS:"
+      "> Games : #{stats.overall.gamesPlayed}"
+      "> Wins  : #{stats.overall.wins}"
+      "> Shots : #{stats.overall.totalShots}"
+      "> Hits  : #{stats.overall.totalHits}"
+      "> Hit % : #{stats.overall.hitPerc}"
+      "> Ships Sunk: #{stats.overall.shipsSunk}"
     ]
 
     output = lines.join("\r")
