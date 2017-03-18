@@ -150,7 +150,7 @@ module.exports = (robot) ->
 
   startBattle = (challenger, challenged) ->
     battle = getBattle challenger, challenged
-    if not battle? or battle.status is "game-over"
+    if not battle? or battle.state is "game-over"
       console.log "Starting new battle..."
       battleKey = getBattleKey challenger, challenged
       battle = new Battle challenger, challenged
