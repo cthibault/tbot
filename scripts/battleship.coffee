@@ -21,94 +21,8 @@
 #     2. player2 accepts challenge
 #     3. both players setup their boards and indicate they are ready to start
 #     4. player2 fires first and turns alternate
-#     5. game ends when either:
-#          - one of the players sinks all the other player's ships
-#          - one of the players surrenders
+#     5. game ends when one of the players sinks all the other player's ships
 #
-#
-#           SHOTS
-#    A B C D E F G H I J
-#  1 - - - - - - - - - -
-#  2 - - - - - - - - - -
-#  3 - - - - - - - - - -
-#  4 - - - - - - - - - -
-#  5 - - - - - - - - - -
-#  6 - - - - - - - - - -
-#  7 - - - - - - - - - -
-#  8 - - - - - - - - - -
-#  9 - - - - o - - - - -
-# 10 - - - - - - x - - -
-#    A B C D E F G H I J
-#  1 - - - - - - - - - -
-#  2 - - S S S x S - - -
-#  3 - - - - - - o - - -
-#  4 - - - - S o - - - -
-#  5 S - - - S - - - - -
-#  6 S - - - S - - - - -
-#  7 S - - - - - - - - -
-#  8 S - - - - - - - - -
-#  9 - - - S S - - - - -
-# 10 - - - - - - S S S -
-#           SHIPS
-#
-#
-# Ships
-# Id Size Name       Coordinates
-# 1  5    Carrier    c2:g2
-# 2  4    Battleship a5:a8
-# 3  3    Cruiser    g10:i10
-# 4  3    Destroyer  e4:e6
-# 5  2    Submarine  d9:e9
-# 
-# 
-# Battleship  # Dictionary of competitions
-#   PlayerA vs PlayerB
-#     Stats # Dictionary
-#       GamesPlayed: 10
-#       Victories: 6
-#       Defeats: 4
-#       Surrenders: 0
-#     Game
-#       Challenger: [slack-id]
-#       State {challenged|setup|battle|victory}
-#       CurrentPlayer: [slack-id]
-#       Boards  # Store as a dictionary <slack-id, PlayerObject>
-#         Player
-#           Id: [slack-id]
-#           Ships
-#             Idx Id Size Health Name      # Store as an array of ships
-#             0   5  5    5      Carrier
-#             1   4  4    4      Battleship
-#             2   3  3    2      Cruiser    # Reduce Health on hit. Sunk when health = 0
-#             3   2  3    3      Destroyer
-#             4   1  2    2      Submarine
-#           ShipsBoard
-#                A B C D E F G H I J # Store board as array of arrays
-#              1 - - - - - - - - - -
-#              2 - - 0 0 0 0 0 - - - # Store the index of the ship to decrement
-#              3 - - - - - - - - - -
-#              4 - - - - 2 - - - - -
-#              5 1 - - - x - - - - - # Replace ship index with 'x' on board where shot was a hit
-#              6 1 - - - 2 - - - - -
-#              7 1 - - - - - - - o - # Replace ship index with 'o' on board where shot was a miss
-#              8 1 - - - - - - - - -
-#              9 - - - 4 4 - - - - -
-#             10 - - - - - - 3 3 3 -
-#           Shots
-#             [{'e9','o'},{'g10','x'}] # Array of {shot,result} kvp
-#           ShotsBoard
-#                A B C D E F G H I J
-#              1 - - - - - - - - - -
-#              2 - - - - - - - - - -
-#              3 - - - - - - - - - -
-#              4 - - - - - - - - - -
-#              5 - - - - - - - - - -
-#              6 - - - - - - - - - -
-#              7 - - - - - - - - - -
-#              8 - - - - - - - - - -
-#              9 - - - - o - - - - - # replace '-' placeholder with 'o' for miss
-#             10 - - - - - - x - - - # replace '-' placeholder with 'x' for hit
-
 
 ##
 ## HELPER METHODS
@@ -502,18 +416,12 @@ module.exports = (robot) ->
         }
       ]
 
-  class BattleStats
-    constructor: () ->
-      @gamesPlayed = 0
-      @victories = 0
-      @defeats = 0
-      @surrenders = 0
 
 ##
 ## ROBOT LISTENERS
 ##
 # hubot I challenge <user> to battleship
-  robot.respond /I challenges? @?(.+) to battleship/i, (msg) ->
+  robot.respond /I challenge @?(\S+) .*battleship/i, (msg) ->
     challenger = msg.message.user.name.toLowerCase()
     challenged = msg.match[1].trim().toLowerCase()
 
@@ -537,7 +445,7 @@ module.exports = (robot) ->
         msg.reply "You've already been challenged by @#{challenged}"
 
 # hubot I accept <user> challenge
-  robot.respond /I accept @?(.+) challenge/i, (msg) ->
+  robot.respond /I accept @?(\S+) .*challenge/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[1].trim().toLowerCase()
 
@@ -569,7 +477,7 @@ module.exports = (robot) ->
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
 # hubot Deploy <ship name> to <start-coord>:<end:coord> against <user>
-  robot.respond /Deploy (.+) to ([a-jA-J]\d):([a-jA-J]\d) against @?(.+)/i, (msg) ->
+  robot.respond /Deploy (\S+)\s.*\s?([a-jA-J]\d):([a-jA-J]\d).*\s@?(\S+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[4].trim().toLowerCase()
     shipName = msg.match[1].trim().toLowerCase()
@@ -591,8 +499,10 @@ module.exports = (robot) ->
         if coordinates? and coordinates.length > 0
           player = (p for p in battle.players when p.username is actor)[0]
           board = player.boards.ships
-          ship = (s for s in player.ships when s.name.toLowerCase() is shipName)[0]
-          if ship?
+
+          shipMatches = (s for s in player.ships when s.name.toLowerCase().startsWith(shipName))
+          if shipMatches.length is 1
+            ship = shipMatches[0]
             # validate that cells match ship size
             if coordinates.length is ship.size
               # check the cells
@@ -622,7 +532,7 @@ module.exports = (robot) ->
               msg.reply "Those coordinates do not match the size of ship you are deploying.  Do the math and try again..."
           else
             shipsMessage = prettyprintShips player 
-            msg.reply "I don't believe you have a ship by the name of _#{shipName}_.  Your ships are:\r#{shipsMessage}"
+            msg.reply "I'm not sure which ship _#{shipName}_ refers to.  Here are you our ships:\r#{shipsMessage}"
         else
           msg.reply "Those coordinates don't make sense to me.  Try again!"
       else
@@ -635,7 +545,7 @@ module.exports = (robot) ->
     msg.reply "TBD"
 
 # hubot Show my board|shots|ships against <user>
-  robot.respond /Show (me )?my (boards?|shots?|ships?) against @?(.+)/i, (msg) ->
+  robot.respond /Show (me )?my (boards?|shots?|ships?).*\s@?(\S+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[3].trim().toLowerCase()
     boardType = msg.match[2].trim().toLowerCase()
@@ -659,7 +569,7 @@ module.exports = (robot) ->
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
 # hubot I'm ready to battle <user>
-  robot.respond /I('m)? ready to battle @?(.+)/i, (msg) ->
+  robot.respond /I('m)? ready to battle @?(\S+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[2].trim().toLowerCase()
 
@@ -704,7 +614,7 @@ module.exports = (robot) ->
       msg.reply "Umm...you might be losing your edge. @#{opponent} has not challenged you to battle. Perhaps you ought to challenge them.  ;)"
 
 # hubot Fire <coord> against <user>
-  robot.respond /Fire ([a-jA-J]\d) (against|at)?\s?@?(.+)/i, (msg) ->
+  robot.respond /Fire ([a-jA-J]\d) (against|at)?\s?@?(\S+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[3].trim().toLowerCase()
     targetCoord = msg.match[1].trim().toLowerCase()
@@ -822,7 +732,7 @@ module.exports = (robot) ->
     robot.brain.data.battleship = {}
     msg.reply "Battleship Brain reset..."
 
-  robot.respond /fix bs @?(.+)/i, (msg) ->
+  robot.respond /fix bs @?(\S+)/i, (msg) ->
     actor = msg.message.user.name.toLowerCase()
     opponent = msg.match[1].trim().toLowerCase()
 
